@@ -168,10 +168,21 @@ if (-not $ffprobe) {
 }
 
 $audioExts = @(".wav", ".mp3", ".m4a", ".flac", ".aac", ".ogg")
+$excludeOutputDir = $false
+try {
+    $srcResolved = (Resolve-Path -LiteralPath $src).Path
+    if (-not [string]::IsNullOrWhiteSpace($dstResolved) -and ($dstResolved -ne $srcResolved)) {
+        $excludeOutputDir = $true
+    }
+} catch {
+    # If we can't resolve paths for any reason, err on the safe side and don't exclude.
+    $excludeOutputDir = $false
+}
+
 $files = Get-ChildItem -Path $src -Recurse -File |
     Where-Object {
         ($audioExts -contains $_.Extension.ToLowerInvariant()) -and
-        ($_.FullName -notlike ($dstResolved + "*"))
+        (-not $excludeOutputDir -or ($_.FullName -notlike ($dstResolved + "\\*")))
     }
 
 # Skip files that already look like outputs from this script (prevents double-work/clutter)
@@ -223,8 +234,15 @@ foreach ($f in $files) {
         }
     }
 
+    $targetDirResolved = $targetDir
+    try {
+        $targetDirResolved = (Resolve-Path -LiteralPath $targetDir).Path
+    } catch {
+        # ignore
+    }
+
     $outNameBase = $safeTitle
-    if ($targetDir -eq $f.DirectoryName) {
+    if ($targetDirResolved -eq $f.DirectoryName) {
         if ([string]::IsNullOrWhiteSpace($Suffix)) {
             throw "OutDir is the same as the source file folder, but -Suffix is empty. Refusing to overwrite in-place. Provide -Suffix (e.g. _converted) or choose a different -OutDir."
         }
